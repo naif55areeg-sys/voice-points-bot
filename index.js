@@ -4,13 +4,10 @@ import {
   EmbedBuilder,
   SlashCommandBuilder,
   REST,
-  Routes,
-  AttachmentBuilder
+  Routes
 } from "discord.js";
 import fs from "fs";
 import dotenv from "dotenv";
-import { createCanvas, loadImage } from "canvas";
-import GIFEncoder from "gifencoder";
 
 dotenv.config();
 
@@ -48,77 +45,15 @@ function pointsForNextLevel(level) {
   return Math.floor(20 + level * level * 5);
 }
 
-// ================= RANK CARD =================
-async function createRankCard(member, isWinner = false) {
-  const user = data[member.id];
-  const needed = pointsForNextLevel(user.level);
-  const progress = Math.min(user.points / needed, 1);
-
-  const width = 700;
-  const height = 250;
-
-  const encoder = new GIFEncoder(width, height);
-  encoder.start();
-  encoder.setRepeat(0);
-  encoder.setDelay(120);
-  encoder.setQuality(10);
-
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
-
-  const bg = await loadImage("./background.png");
-  const avatar = await loadImage(
-    member.user.displayAvatarURL({ extension: "png" })
-  );
-
-  for (let i = 0; i < 10; i++) {
-    ctx.clearRect(0, 0, width, height);
-
-    ctx.drawImage(bg, 0, 0, width, height);
-
-    const pulse = Math.sin(i / 2) * 4;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(110, 125, 60 + pulse, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(avatar, 50, 65, 120, 120);
-    ctx.restore();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 26px Arial";
-    ctx.fillText(member.user.username, 200, 70);
-
-    ctx.font = "18px Arial";
-    ctx.fillText(`Level | لفل: ${user.level}`, 200, 110);
-    ctx.fillText(`Points | النقاط: ${user.points} / ${needed}`, 200, 140);
-
-    ctx.fillStyle = "#1e293b";
-    ctx.fillRect(200, 170, 430, 18);
-    ctx.fillStyle = "#22c55e";
-    ctx.fillRect(200, 170, 430 * progress, 18);
-
-    if (isWinner) {
-      ctx.font = "bold 22px Arial";
-      ctx.fillStyle = "#facc15";
-      ctx.fillText("🏅 DAILY WINNER", 480, 40);
-    }
-
-    encoder.addFrame(ctx);
-  }
-
-  encoder.finish();
-  return new AttachmentBuilder(encoder.out.getData(), { name: "rank.gif" });
-}
-
-// ================= COMMANDS REGISTER =================
+// ================= COMMANDS =================
 const commands = [
   new SlashCommandBuilder()
     .setName("نقاطي")
-    .setDescription("يعرض بطاقتك ونقاطك"),
+    .setDescription("يعرض نقاطك ولفلك"),
 
   new SlashCommandBuilder()
     .setName("معلومات")
-    .setDescription("معلومات عن البوت ونظام النقاط")
+    .setDescription("معلومات عن نظام النقاط")
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
@@ -155,19 +90,11 @@ setInterval(async () => {
           data[member.id].points -= needed;
           data[member.id].level++;
 
-          const isWinner =
-            member.roles.cache.has(TOP1_ROLE) ||
-            member.roles.cache.has(TOP2_ROLE) ||
-            member.roles.cache.has(TOP3_ROLE);
-
-          const card = await createRankCard(member, isWinner);
-          const levelChannel = guild.channels.cache.get(LEVEL_CHANNEL_ID);
-
-          if (levelChannel) {
-            levelChannel.send({
-              content: `🎉 <@${member.id}> Level Up!`,
-              files: [card]
-            });
+          const channelLevel = guild.channels.cache.get(LEVEL_CHANNEL_ID);
+          if (channelLevel) {
+            channelLevel.send(
+              `🎉 <@${member.id}> **Level Up!**\n🆙 Level: **${data[member.id].level}**`
+            );
           }
         }
       }
@@ -226,37 +153,30 @@ setInterval(async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  await interaction.deferReply({ ephemeral: false });
-
   if (interaction.commandName === "نقاطي") {
     if (!data[interaction.user.id]) {
       data[interaction.user.id] = { points: 0, level: 0, dailyPoints: 0 };
     }
 
-    const member = interaction.member;
-
-    const isWinner =
-      member.roles.cache.has(TOP1_ROLE) ||
-      member.roles.cache.has(TOP2_ROLE) ||
-      member.roles.cache.has(TOP3_ROLE);
-
-    const card = await createRankCard(member, isWinner);
-    return interaction.editReply({ files: [card] });
+    await interaction.reply(
+      `👤 <@${interaction.user.id}>\n` +
+      `🆙 Level: **${data[interaction.user.id].level}**\n` +
+      `⭐ Points: **${data[interaction.user.id].points}**`
+    );
   }
 
   if (interaction.commandName === "معلومات") {
     const embed = new EmbedBuilder()
-      .setColor(0x8b5cf6)
-      .setTitle("🎧 Voice Levels Bot")
-      .setDescription("نظام تفاعل صوتي ذكي | Smart Voice XP System")
+      .setColor(0x7c3aed)
+      .setTitle("✨ نظام النقاط الصوتية ✨")
+      .setDescription("🎧 نقاط تلقائية عند التواجد في الرومات الصوتية")
       .addFields(
-        { name: "📌 الأوامر", value: "`/نقاطي` — عرض بطاقتك\n`/معلومات` — معلومات البوت" },
-        { name: "🏆 Daily Top", value: "يوميًا الساعة 12:00 AM بتوقيت السعودية" },
-        { name: "ℹ️ ملاحظات", value: "النقاط محفوظة حتى لو طفى البوت" }
-      )
-      .setTimestamp();
+        { name: "⏱️ النظام", value: "نقطة كل دقيقة بدون Deaf" },
+        { name: "🏆 الترتيب اليومي", value: "12:00 الليل بتوقيت السعودية 🇸🇦" },
+        { name: "📌 أمر", value: "`/نقاطي`" }
+      );
 
-    return interaction.editReply({ embeds: [embed] });
+    await interaction.reply({ embeds: [embed] });
   }
 });
 
